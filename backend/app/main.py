@@ -17,7 +17,6 @@ from .services import expire_offers
 
 log = logging.getLogger("haulgo")
 
-
 async def _housekeeping():
     while True:
         await asyncio.sleep(5)
@@ -27,14 +26,12 @@ async def _housekeeping():
         except Exception:  # noqa
             log.exception("housekeeping failed")
 
-
 def _add_missing_columns():
     """Existing databases: add the google_sub column used by Sign in with Google (create_all does not alter tables)."""
     cols = {c["name"] for c in inspect(engine).get_columns("users")}
     if "google_sub" not in cols:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(40)"))
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,10 +48,21 @@ async def lifespan(app: FastAPI):
     yield
     task.cancel()
 
-
 app = FastAPI(title="HaulGo API", version="1.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://haulgo.highcodex.online"],
-                   allow_methods=["*"], allow_headers=["*"], allow_credentials=False)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://haulgo.highcodex.online",
+        "https://haul-go.vercel.app",
+        "https://www.haul-go.vercel.app",
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
 
 for r in (common.router, customer.router, customer.webhook_router, driver.router, comms.router, ai.router, admin.router):
     app.include_router(r, prefix="/api")
