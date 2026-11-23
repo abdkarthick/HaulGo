@@ -1,6 +1,8 @@
 import { translateError } from "./i18n";
 export type Role = "customer" | "driver" | "admin";
 
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
 const tk = (r: Role) => `hg_token_${r}`;
 // Tokens live in sessionStorage: every new tab / app launch starts at the login page (by design).
 export const tokens = {
@@ -39,7 +41,7 @@ export async function api<T = any>(role: Role, path: string, o: Opts = {}): Prom
   let body: BodyInit | undefined;
   if (o.form) body = o.form;
   else if (o.body !== undefined) { headers["Content-Type"] = "application/json"; body = JSON.stringify(o.body); }
-  let url = `/api${path}`;
+  let url = API_BASE ? `${API_BASE}/api${path}` : `/api${path}`;
   if (o.query) {
     const q = new URLSearchParams();
     Object.entries(o.query).forEach(([k, v]) => v !== undefined && v !== null && v !== "" && q.set(k, String(v)));
@@ -66,7 +68,7 @@ export async function api<T = any>(role: Role, path: string, o: Opts = {}): Prom
   return (ct.includes("json") ? await res.json() : (await res.blob())) as T;
 }
 
-export const fileUrl = (role: Role, id: number) => `/api/files/${id}?t=${tokens.get(role) || ""}`;
+export const fileUrl = (role: Role, id: number) => `${API_BASE}/api/files/${id}?t=${tokens.get(role) || ""}`;
 export const downloadAuthed = async (role: Role, path: string, name: string) => {
   const blob = await api<Blob>(role, path);
   const a = document.createElement("a");
