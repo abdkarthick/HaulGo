@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2
+pyjwt
+httpx
+reportlab
+python-multipart
+pydantic>=2
+pytest
+tzdata
