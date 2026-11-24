@@ -1,12 +1,12 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { lazy, Suspense } from "react";
-import IntroShell from "./pages/Intro";
-import Welcome from "./pages/Welcome";
 import { ToastProvider } from "./lib/session";
 import { LangProvider } from "./lib/i18n";
 import { Loading } from "./components/ui";
 
-// Heavy apps - ellam lazy thaan, correct ah iruku
+// PERF FIX: IntroShell ah kooda lazy - 3D Intro code Home la udane vendaam
+const IntroShell = lazy(() => import("./pages/Intro"));
+const Welcome = lazy(() => import("./pages/Welcome"));
 const CustomerApp = lazy(() => import("./customer/CustomerApp"));
 const DriverApp = lazy(() => import("./driver/DriverApp"));
 const AdminApp = lazy(() => import("./admin/AdminApp"));

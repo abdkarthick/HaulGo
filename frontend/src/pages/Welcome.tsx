@@ -7,8 +7,8 @@ import { useToast } from "../lib/session";
 import { useIntroDone } from "./Intro";
 import { useI18n } from "../lib/i18n";
 import { LanguageButton, LanguagePicker } from "../components/Language";
-import Assistant from "../components/Assistant";
 
+const Assistant = lazy(() => import("../components/Assistant"));
 const HeroStage = lazy(() => import("../components/World3D").then((m) => ({ default: m.HeroStage })));
 
 type Cfg = { google_client_id?: string | null; dev_mode: boolean; payment_mode: string; integrations: Record<string, boolean>; support_phone: string };
@@ -16,18 +16,58 @@ type Cfg = { google_client_id?: string | null; dev_mode: boolean; payment_mode: 
 export default function Welcome() {
   const [role, setRole] = useState<"customer" | "driver">(() => (remembered.role() === "driver" ? "driver" : "customer"));
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  useEffect(() => { api<Cfg>("customer", "/config").then(setCfg).catch(() => {}); }, []);
+  // PERF: config ah idle la thaan eduku - LCP ah block panna koodathu
+  useEffect(() => {
+    const id = setTimeout(() => { api<Cfg>("customer", "/config").then(setCfg).catch(() => {}); }, 800);
+    return () => clearTimeout(id);
+  }, []);
   const introDone = useIntroDone();
   const { t } = useI18n();
-  const [firstRun] = useState(true);   // the language picker opens on every visit to the welcome page   // keep the picker open until the user presses Continue
+  const [firstRun] = useState(true);
   const [pickerDone, setPickerDone] = useState(false);
-  const card = useRef<HTMLElement>(null);
-  const pick = (r: "customer" | "driver") => { setRole(r); card.current?.scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => card.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true }), 450); };
+
+  // PERF FIX: Language Picker ah 1200ms delay - LCP element Welcome H1 thaan, Picker illa
+  const [showPicker, setShowPicker] = useState(false);
+  useEffect(() => {
+    if (!introDone) return;
+    const id = setTimeout(() => setShowPicker(true), 1200);
+    return () => clearTimeout(id);
+  }, [introDone]);
+
+  const [show3D, setShow3D] = useState(false);
+  useEffect(() => {
+    if (!introDone) return;
+    let timeoutId: number | undefined;
+    const start3D = () => {
+      window.removeEventListener("wheel", start3D);
+      window.removeEventListener("touchmove", start3D);
+      window.removeEventListener("keydown", onKeyDown);
+      timeoutId = window.setTimeout(() => setShow3D(true), 1000);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (["ArrowDown", "PageDown", " ", "End"].includes(event.key)) start3D();
+    };
+    window.addEventListener("wheel", start3D, { passive: true });
+    window.addEventListener("touchmove", start3D, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("wheel", start3D);
+      window.removeEventListener("touchmove", start3D);
+      window.removeEventListener("keydown", onKeyDown);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [introDone]);
+
+  // PERF FIX: scrollIntoView + querySelector ah thookiten - Forced Reflow pogum
+  const pick = (r: "customer" | "driver") => { setRole(r); };
+
   return (
     <div className="min-h-screen bg-obsidian text-white relative overflow-hidden">
-      {introDone && firstRun && !pickerDone && <LanguagePicker blocking onClose={() => setPickerDone(true)} />}
-      {introDone && (!firstRun || pickerDone) && <Assistant role={role} />}
-      <div className="absolute -top-40 -right-40 w-[40rem] h-[40rem] rounded-full opacity-20 blur-3xl" style={{ background: "radial-gradient(circle,#A8651A,transparent 70%)" }} />
+      {introDone && showPicker && firstRun && !pickerDone && <LanguagePicker blocking onClose={() => setPickerDone(true)} />}
+      {introDone && showPicker && (!firstRun || pickerDone) && (
+        <Suspense fallback={null}><Assistant role={role} /></Suspense>
+      )}
+      {/* PERF: blur-3xl div ah thookiten - ithu thaan CPU ah saapuduthu */}
       <header className="relative z-10 w-full max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
         <Logo light size={24} />
         <div className="flex items-center gap-3"><LanguageButton light /><Link to="/admin" className="text-xs text-white/50 hover:text-white font-semibold">Admin sign in →</Link></div>
@@ -35,7 +75,7 @@ export default function Welcome() {
       <main className="relative z-10 w-full max-w-6xl mx-auto px-5 pb-4 grid lg:grid-cols-2 gap-10 items-center pt-2 lg:pt-4">
         <section>
           <p className="chip bg-white/10 text-white/80 mb-5">{t("welcome.badge")}</p>
-          <h1 className="text-4xl sm:text-6xl font-extrabold leading-[1.02] animate-rise">{t("welcome.h1a")}<br /><span className="text-brand">{t("welcome.h1b")}</span></h1>
+          <h1 className="text-4xl sm:text-6xl font-extrabold leading-[1.02]">{t("welcome.h1a")}<br /><span className="text-brand">{t("welcome.h1b")}</span></h1>
           <p className="mt-3 text-white/85 tracking-[.28em] text-xs sm:text-sm uppercase font-bold">Moving Industries Forward.</p>
           <p className="mt-5 text-white/65 max-w-md leading-relaxed">{t("welcome.desc")}</p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -43,7 +83,7 @@ export default function Welcome() {
             <button onClick={() => pick("driver")} className="inline-flex items-center justify-center rounded-xl border border-white/25 px-6 py-3.5 font-bold text-white hover:bg-white/10 transition">{t("welcome.driver")}</button>
           </div>
         </section>
-        <section ref={card} className="bg-white text-obsidian rounded-3xl p-5 sm:p-7 shadow-2xl animate-rise" style={{ animationDelay: ".1s" }}>
+        <section className="bg-white text-obsidian rounded-3xl p-5 sm:p-7 shadow-2xl">
           <div className="grid grid-cols-2 gap-2 p-1 bg-offwhite rounded-2xl mb-6" role="tablist" aria-label="Choose account type">
             {([["customer", t("tab.customer"), t("tab.customerSub")], ["driver", t("tab.driver"), t("tab.driverSub")]] as const).map(([k, title, s]) => (
               <button key={k} role="tab" aria-selected={role === k} onClick={() => setRole(k)} className={`text-left rounded-xl px-4 py-3 transition ${role === k ? "bg-obsidian text-white shadow" : "text-obsidian/70 hover:bg-white"}`}>
@@ -54,11 +94,14 @@ export default function Welcome() {
           <Login role={role} cfg={cfg} />
         </section>
       </main>
-      {/* cinematic 3D truck driving along an industrial road, kept below the content so it never covers the form */}
       <div className="relative">
-        <Suspense fallback={<div className="h-[40vh] min-h-[300px]" />}>
-          <HeroStage className="h-[40vh] min-h-[300px] w-full" paused={!introDone} />
-        </Suspense>
+        {show3D ? (
+          <Suspense fallback={<div className="h-[40vh] min-h-[300px]" />}>
+            <HeroStage className="h-[40vh] min-h-[300px] w-full" paused={!introDone} />
+          </Suspense>
+        ) : (
+          <div className="h-[40vh] min-h-[300px]" aria-hidden="true" />
+        )}
       </div>
       <section className="relative z-10 w-full max-w-6xl mx-auto px-5 py-10">
           <ul className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
@@ -101,7 +144,6 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const [left, setLeft] = useState(0);
   useEffect(() => { setPhone(remembered.phone(role)); setStep("phone"); setOtp(""); setDevOtp(null); }, [role]);
   useEffect(() => { if (left <= 0) return; const id = setTimeout(() => setLeft(left - 1), 1000); return () => clearTimeout(id); }, [left]);
-
   const request = async () => {
     setBusy(true);
     try {
@@ -159,7 +201,7 @@ function loadGsi(): Promise<void> {
     gsiLoading = new Promise<void>((resolve, reject) => {
       const el = document.createElement("script");
       el.src = "https://accounts.google.com/gsi/client";
-      el.async = true;
+      el.async = true; el.defer = true;
       el.onload = () => resolve();
       el.onerror = () => { gsiLoading = null; reject(new Error("Could not load Google sign-in")); };
       document.head.appendChild(el);
@@ -168,7 +210,6 @@ function loadGsi(): Promise<void> {
   return gsiLoading;
 }
 
-/** "Continue with Google": Google Identity Services returns an ID token which the backend verifies (POST /api/auth/google). */
 function GoogleSignIn({ role, clientId }: { role: "customer" | "driver"; clientId: string | null }) {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -179,24 +220,27 @@ function GoogleSignIn({ role, clientId }: { role: "customer" | "driver"; clientI
   useEffect(() => {
     if (!clientId || !box.current) return;
     let dead = false;
-    loadGsi().then(() => {
-      if (dead || !box.current) return;
-      const g = (window as any).google.accounts.id;
-      g.initialize({
-        client_id: clientId,
-        callback: async (resp: { credential: string }) => {
-          try {
-            const r = await api("customer", "/auth/google", { body: { credential: resp.credential, role: roleRef.current } });
-            tokens.set(roleRef.current as Role, r.token);
-            remembered.setRole(roleRef.current);
-            nav(`/${roleRef.current}`, { replace: true });
-          } catch (e: any) { toast(e.message, "err"); }
-        },
-      });
-      box.current.innerHTML = "";
-      g.renderButton(box.current, { theme: "outline", size: "large", shape: "pill", text: "continue_with", width: Math.min(400, box.current.clientWidth || 320) });
-    }).catch((e) => toast(e.message, "err"));
-    return () => { dead = true; };
+    const id = setTimeout(() => {
+      loadGsi().then(() => {
+        if (dead || !box.current) return;
+        const g = (window as any).google.accounts.id;
+        g.initialize({
+          client_id: clientId,
+          callback: async (resp: { credential: string }) => {
+            try {
+              const r = await api("customer", "/auth/google", { body: { credential: resp.credential, role: roleRef.current } });
+              tokens.set(roleRef.current as Role, r.token);
+              remembered.setRole(roleRef.current);
+              nav(`/${roleRef.current}`, { replace: true });
+            } catch (e: any) { toast(e.message, "err"); }
+          },
+        });
+        box.current.innerHTML = "";
+        // PERF FIX: clientWidth ah thookiten - Fixed 320, Forced Reflow illa
+        g.renderButton(box.current, { theme: "outline", size: "large", shape: "pill", text: "continue_with", width: 320 });
+      }).catch((e) => toast(e.message, "err"));
+    }, 1500);
+    return () => { dead = true; clearTimeout(id); };
   }, [clientId, nav, toast]);
   if (!clientId) {
     return (
@@ -214,7 +258,6 @@ function GoogleG() {
   );
 }
 
-/** Email + password: sign in, create account, forgot password (6-digit code by email). */
 function EmailAuth({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | null }) {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -227,7 +270,6 @@ function EmailAuth({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | null
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { setView("login"); setPassword(""); setCode(""); setDevCode(null); }, [role]);
-
   const finish = (r: { token: string }) => {
     tokens.set(role as Role, r.token);
     remembered.setRole(role);

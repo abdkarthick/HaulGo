@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { SessionProvider, useSession, useToast } from "../lib/session";
 import { api, tokens } from "../lib/api";
 import { fmtDate, km, money, soundPrefs, usePoll } from "../lib/util";
 import { Chip, Field, Loading, Row, Sheet, Spinner, StatusBadge, Switch, Warn } from "../components/ui";
 import { EmptyArt, Logo } from "../components/SvgArt";
-import MapView from "../components/MapView";
+// PERF FIX: Map + 3D ah static ah import panna koodathu
+// import MapView from "../components/MapView"; // DELETE
+// import { VehicleViewer } from "../components/Truck3D"; // DELETE
 import { ComplaintCenter, NotificationCenter, useLiveAlerts } from "../components/Shared";
-import { VehicleViewer } from "../components/Truck3D";
 import { IcArrow, IcBell, IcBolt, IcBox, IcCalendar, IcCheck, IcHome, IcPin, IcReceipt, IcRepeat, IcShield, IcTruck, IcUser } from "../components/Icons";
 import { LanguageButton } from "../components/Language";
 import Assistant from "../components/Assistant";
 import { useI18n, Key } from "../lib/i18n";
-import Book from "./Book";
-import TripDetail from "./TripDetail";
+
+// PERF FIX: Map + 3D + Book ellam lazy
+const MapView = lazy(() => import("../components/MapView"));
+const VehicleViewer = lazy(() => import("../components/Truck3D").then(m => ({ default: m.VehicleViewer })));
+const Book = lazy(() => import("./Book"));
+const TripDetail = lazy(() => import("./TripDetail"));
 
 export default function CustomerApp() {
   return <SessionProvider role="customer"><Guard /></SessionProvider>;
@@ -45,14 +50,16 @@ function Shell() {
         </div>
       </header>
       <main className="px-4 py-4 pb-28">
-        <Routes>
-          <Route index element={<Home />} />
-          <Route path="book" element={<Book />} />
-          <Route path="trips" element={<Trips />} />
-          <Route path="trips/:id" element={<TripDetail chatUnread={chatUnread.bookings} />} />
-          <Route path="account" element={<Account onLogout={() => { logout(); nav("/", { replace: true }); }} />} />
-          <Route path="*" element={<Navigate to="/customer" replace />} />
-        </Routes>
+        <Suspense fallback={<Loading />}>
+          <Routes>
+            <Route index element={<Home />} />
+            <Route path="book" element={<Book />} />
+            <Route path="trips" element={<Trips />} />
+            <Route path="trips/:id" element={<TripDetail chatUnread={chatUnread.bookings} />} />
+            <Route path="account" element={<Account onLogout={() => { logout(); nav("/", { replace: true }); }} />} />
+            <Route path="*" element={<Navigate to="/customer" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       <nav className="fixed bottom-0 left-0 right-0 z-[1100] bg-white/95 backdrop-blur border-t border-line safe-b" aria-label="Main">
         <div className="max-w-2xl mx-auto flex px-2">
@@ -85,7 +92,6 @@ const capLabel = (kg: number) => (kg >= 1000 ? `${+(kg / 1000).toFixed(1)} t` : 
 const place = (a: string) => { const p = (a || "").split(",").map((x) => x.trim()).filter(Boolean); return p[0] && p[0].length < 4 && p[1] ? p[1] : p[0] || "—"; };
 const greeting = (h: number): "greet.morning" | "greet.afternoon" | "greet.evening" => (h < 12 ? "greet.morning" : h < 17 ? "greet.afternoon" : "greet.evening");
 
-/** Vehicle picker with a live 3D preview and a weight slider that recommends the smallest vehicle that fits. */
 function VehicleAdvisor() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -108,7 +114,9 @@ function VehicleAdvisor() {
         <div><h2 className="text-lg font-extrabold">{t("home.vehicles")}</h2><p className="text-xs text-white/60 mt-0.5 max-w-[16rem]">{t("home.vehiclesSub")}</p></div>
         {!manual && !heavy && <span className="chip bg-brand text-white whitespace-nowrap shrink-0">{t("home.best")}</span>}
       </div>
-      <VehicleViewer kind={sel.key} className="h-52 sm:h-60" />
+      <Suspense fallback={<div className="h-52 sm:h-60 bg-white/5" />}>
+        <VehicleViewer kind={sel.key} className="h-52 sm:h-60" />
+      </Suspense>
       <div className="px-5 -mt-1 mb-4">
         <p className="font-extrabold leading-tight">{shortName(sel.name)}</p>
         <p className="text-xs text-white/60">{t("home.upTo", { n: capLabel(sel.capacity_kg) })} · {t("home.rate", { x: sel.per_km })}</p>
@@ -159,7 +167,6 @@ function Home() {
         <div><p className="text-steel text-sm font-medium">{t(greeting(new Date().getHours()))}</p>
           <h1 className="text-[28px] leading-tight font-extrabold flex items-center gap-2">{me?.company_name || me?.name}{me?.verified && <span title={t("home.verified")} className="w-6 h-6 rounded-full bg-brand text-white inline-flex items-center justify-center"><IcCheck size={14} /></span>}</h1></div>
       </div>
-
       <section className="relative rounded-3xl bg-obsidian text-white p-5 overflow-hidden shadow-card">
         <div className="pointer-events-none absolute -top-24 -right-20 w-72 h-72 rounded-full opacity-30 blur-3xl" style={{ background: "radial-gradient(circle,#A8651A,transparent 70%)" }} />
         <div className="relative">
@@ -190,21 +197,19 @@ function Home() {
           </div>
         </div>
       </section>
-
       <VehicleAdvisor />
-
       {firstActive && (
         <section className="card overflow-hidden">
           <div className="px-4 pt-3.5 pb-3 flex items-center justify-between"><p className="font-extrabold flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-brand animate-pulseDot" />{t("home.live")} · {firstActive.code}</p><StatusBadge s={firstActive.status} /></div>
-          <MapView height={190} pickup={{ lat: firstActive.pickup_lat, lng: firstActive.pickup_lng }} drop={{ lat: firstActive.drop_lat, lng: firstActive.drop_lng }} driver={{ lat: firstActive.driver.lat, lng: firstActive.driver.lng }} driverStale={firstActive.driver.location_stale} />
+          <Suspense fallback={<div className="h-[190px] bg-offwhite" />}>
+            <MapView height={190} pickup={{ lat: firstActive.pickup_lat, lng: firstActive.pickup_lng }} drop={{ lat: firstActive.drop_lat, lng: firstActive.drop_lng }} driver={{ lat: firstActive.driver.lat, lng: firstActive.driver.lng }} driverStale={firstActive.driver.location_stale} />
+          </Suspense>
         </section>
       )}
-
       <section>
         <div className="flex justify-between items-center mb-2.5"><h2 className="font-extrabold text-lg">{t("home.active")}</h2>{active.length > 0 && <Chip tone="red">{active.length}</Chip>}</div>
         {trips.loading ? <Loading /> : active.length ? <div className="space-y-3">{active.map((x) => <TripCard key={x.id} b={x} />)}</div> : <div className="card"><EmptyArt title={t("home.none")} hint={t("home.noneHint")} /></div>}
       </section>
-
       {again.length > 0 && (
         <section>
           <div className="mb-2.5"><h2 className="font-extrabold text-lg">{t("home.again")}</h2><p className="text-xs text-steel">{t("home.againSub")}</p></div>
@@ -219,7 +224,6 @@ function Home() {
           </div>
         </section>
       )}
-
       <div className="grid grid-cols-3 gap-2 pt-1">
         {[[IcShield, t("trust.otp")], [IcPin, t("trust.gps")], [IcReceipt, t("trust.gst")]].map(([Ic, l]: any, i) => (
           <div key={i} className="flex flex-col items-center text-center gap-1.5 px-1"><span className="w-9 h-9 rounded-full bg-white border border-line flex items-center justify-center text-obsidian"><Ic size={18} /></span><span className="text-[11px] font-semibold text-steel leading-tight">{l}</span></div>
@@ -277,7 +281,6 @@ function Account({ onLogout }: { onLogout: () => void }) {
         <div className="grid grid-cols-2 gap-3"><Field label="Business phone"><input className="input" inputMode="numeric" maxLength={10} value={f.business_phone} onChange={(e) => setF({ ...f, business_phone: e.target.value.replace(/\D/g, "") })} /></Field><Field label="Email"><input className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field></div>
         <button className="btn-primary w-full" disabled={busy || !f.name.trim()} onClick={save}>{busy ? <Spinner /> : "Save profile"}</button>
       </div>
-
       <div className="card p-4 space-y-3">
         <p className="font-extrabold">Monthly business credit</p>
         {cs?.status === "approved" ? <><div className="grid grid-cols-3 gap-2 text-center"><div><p className="text-[11px] text-steel uppercase font-bold">Limit</p><p className="font-extrabold">{money(cs.limit)}</p></div><div><p className="text-[11px] text-steel uppercase font-bold">Used</p><p className="font-extrabold text-brand">{money(cs.used)}</p></div><div><p className="text-[11px] text-steel uppercase font-bold">Available</p><p className="font-extrabold">{money(cs.available)}</p></div></div>
@@ -286,7 +289,6 @@ function Account({ onLogout }: { onLogout: () => void }) {
           : cs?.status === "requested" ? <Warn>Your credit request for {money(cs.requested_limit)} is under review.</Warn> : <><p className="text-sm text-steel">Credit is available only to admin-approved business accounts. It is an internal billing ledger, not a loan.</p><button className="btn-dark" onClick={() => setCredit(true)}>Request business credit</button></>}
         <p className="text-xs text-steel">COD: {ov.data?.cod.used ?? 0} of {ov.data?.cod.limit ?? 5} trips used.</p>
       </div>
-
       <div className="card p-4 space-y-3">
         <p className="font-extrabold">Saved locations</p>
         {locs.data?.map((l) => <div key={l.id} className="flex items-center justify-between text-sm gap-3"><div className="min-w-0"><b>{l.label}</b><p className="text-xs text-steel truncate">{l.address}</p></div><button className="text-danger text-xs font-bold" onClick={async () => { await api("customer", `/locations/${l.id}`, { method: "DELETE" }); locs.reload(); }}>Remove</button></div>)}
@@ -295,7 +297,6 @@ function Account({ onLogout }: { onLogout: () => void }) {
         {res.length > 0 && <ul className="border border-line rounded-xl divide-y max-h-36 overflow-auto">{res.map((r, i) => <li key={i}><button className="text-left text-xs p-2 w-full hover:bg-offwhite" onClick={() => { setNewLoc({ ...newLoc, q: r.label, lat: r.lat, lng: r.lng }); setRes([]); }}>{r.label}</button></li>)}</ul>}
         <button className="btn-ghost" disabled={!newLoc.label || !newLoc.lat} onClick={addLoc}>Save location</button>
       </div>
-
       <div className="card p-4 space-y-3">
         <div className="flex items-center justify-between"><span className="font-semibold text-sm">Notification sounds</span><Switch on={snd} label="Sound" onChange={(v) => { setSnd(v); soundPrefs.set(v); }} /></div>
         <button className="btn-ghost w-full" onClick={() => setHelp(true)}>Help, complaints and history</button>
