@@ -15,44 +15,28 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- MSG91 OTP WIDGET -->
+    <script src="https://verify.msg91.com/otp-provider.js"></script>
     <script type="text/javascript">
       var configuration = {
-          widgetId: "366b7a6a6865393631313735",
-          tokenAuth: "593846TohBxZlK6b080557P1",
-        identifier: "91",
+        widgetId: "UNGA_PUTHU_WIDGET_ID_INGA_PODU",
+        tokenAuth: "UNGA_PUTHU_TOKEN_AUTH_INGA_PODU",
         exposeMethods: true,
-        success: (data) => {
+        success: function (data) {
           console.log('success response', data);
           window.dispatchEvent(new CustomEvent("msg91-verified", { detail: data }));
+          window.dispatchEvent(new Event("msg91-verified"));
         },
-        failure: (error) => {
+        failure: function (error) {
           console.log('failure reason', error);
-        },
-      };
-    </script>
-    <script type="text/javascript">
-      (function loadOtpScript(urls) {
-        let i = 0;
-        function attempt() {
-          const s = document.createElement('script');
-          s.src = urls[i];
-          s.async = true;
-          s.onload = () => {
-            if (typeof window.initSendOTP === 'function') {
-              window.initSendOTP(configuration);
-            }
-          };
-          s.onerror = () => {
-            i++;
-            if (i < urls.length) { attempt(); }
-          };
-          document.head.appendChild(s);
         }
-        attempt();
-      })([
-        'https://verify.msg91.com/otp-provider.js',
-        'https://verify.phone91.com/otp-provider.js'
-      ]);
+      };
+      window.addEventListener('load', function () {
+        if (typeof window.initSendOTP === 'function') {
+          window.initSendOTP(configuration);
+        } else {
+          console.log('MSG91 initSendOTP not found');
+        }
+      });
     </script>
   </body>
 </html>
