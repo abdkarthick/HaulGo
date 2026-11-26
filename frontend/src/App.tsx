@@ -3,6 +3,7 @@ import { lazy, Suspense } from "react";
 import { ToastProvider } from "./lib/session";
 import { LangProvider } from "./lib/i18n";
 import { Loading } from "./components/ui";
+import { AuthProvider } from "./context/AuthContext";
 
 // PERF FIX: IntroShell ah kooda lazy - 3D Intro code Home la udane vendaam
 const IntroShell = lazy(() => import("./pages/Intro"));
@@ -12,20 +13,28 @@ const DriverApp = lazy(() => import("./driver/DriverApp"));
 const AdminApp = lazy(() => import("./admin/AdminApp"));
 const Track = lazy(() => import("./pages/Track"));
 
+// AUTH - Login / OTP
+const Login = lazy(() => import("./pages/Login"));
+const Otp = lazy(() => import("./pages/Otp"));
+
 export default function App() {
   return (
     <LangProvider>
       <ToastProvider>
-        <Suspense fallback={<div className="min-h-screen bg-obsidian"><Loading /></div>}>
-          <Routes>
-            <Route path="/" element={<IntroShell><Welcome /></IntroShell>} />
-            <Route path="/customer/*" element={<CustomerApp />} />
-            <Route path="/driver/*" element={<DriverApp />} />
-            <Route path="/admin/*" element={<AdminApp />} />
-            <Route path="/track/:token" element={<Track />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        <AuthProvider>
+          <Suspense fallback={<div className="min-h-screen bg-obsidian"><Loading /></div>}>
+            <Routes>
+              <Route path="/" element={<IntroShell><Welcome /></IntroShell>} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/otp" element={<Otp />} />
+              <Route path="/customer/*" element={<CustomerApp />} />
+              <Route path="/driver/*" element={<DriverApp />} />
+              <Route path="/admin/*" element={<AdminApp />} />
+              <Route path="/track/:token" element={<Track />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
       </ToastProvider>
     </LangProvider>
   );
