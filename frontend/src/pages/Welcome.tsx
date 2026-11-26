@@ -160,14 +160,24 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const doLogin = async () => {
     if (loggedInRef.current) return;
     loggedInRef.current = true;
+    tokens.clear(role);
     try {
-      const r = await api("customer", "/auth/firebase", { body: { idToken: "msg91", phone, role, name: name || undefined } });
+      const r = await api<{ token?: unknown }>("customer", "/auth/msg91", {
+        body: { phone, role, name: name || undefined },
+      });
+      if (typeof r.token !== "string" || !r.token) {
+        throw new Error("Login response did not include a valid session token.");
+      }
       tokens.set(role as Role, r.token);
-    } catch {
-      tokens.set(role as Role, "msg91-verified");
+      remembered.setRole(role);
+      remembered.setPhone(role, phone);
+      nav(`/${role}`, { replace: true });
+    } catch (error) {
+      loggedInRef.current = false;
+      setOtpSent(false);
+      setOtp("");
+      toast(error instanceof Error ? error.message : "Could not finish login. Please try again.", "err");
     }
-    remembered.setRole(role); remembered.setPhone(role, phone);
-    nav(`/${role}`, { replace: true });
   };
 
   useEffect(() => {

@@ -65,7 +65,7 @@ export default function Login() {
         {loading ? "Anupurathu..." : "Get OTP"}
       </button>
 
-      {/* MSG91 Widget itha use pannum - Firebase recaptcha thevai illa, atha eduthuten */}
+      {/* MSG91 Widget itha use pannum */}
     </div>
   );
 }

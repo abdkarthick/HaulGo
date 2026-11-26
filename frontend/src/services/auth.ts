@@ -1,4 +1,4 @@
-// MSG91 Widget helper - Firebase thevai illa
+// MSG91 Widget helper
 declare global {
   interface Window {
     sendOTP?: (phoneNumber: string, onSuccess?: (data: unknown) => void, onFailure?: (error: unknown) => void) => any;
