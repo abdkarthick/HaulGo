@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, Component, ReactNode } from "react";
 import * as THREE from "three";
 import { Lights, TruckModel } from "../components/Truck3D";
 import { RoadWorld } from "../components/World3D";
@@ -13,18 +13,29 @@ const easeOut = (x: number) => 1 - Math.pow(1 - THREE.MathUtils.clamp(x, 0, 1), 
 const easeIn = (x: number) => Math.pow(THREE.MathUtils.clamp(x, 0, 1), 2.6);
 const easeIO = (x: number) => { const t = THREE.MathUtils.clamp(x, 0, 1); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
 
-// FIX: Props eh illa - <Intro3D /> nu mattum use pannu
+// FIX: 3D fail aanaalum Intro crash aagathu, logo mattum kaatum
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return <div className="absolute inset-0 bg-obsidian flex items-center justify-center"><p className="text-white font-extrabold text-[13vw] sm:text-[6.4vw]">HAUL<span className="text-brand">GO</span></p></div>;
+    return this.props.children;
+  }
+}
+
 export default function Intro3D() {
   const [logo, setLogo] = useState(false);
   return (
-    <div className="absolute inset-0 bg-obsidian">
-      <Canvas dpr={1} camera={{ fov: 34, position: [8, 1.6, 9], near: 0.1, far: 200 }} gl={{ antialias: false, powerPreference: "low-power", stencil: false, depth: true }}>
-        <Director onLogo={() => setLogo(true)} />
-      </Canvas>
-      <div className={`absolute left-0 right-0 top-[5%] text-center pointer-events-none transition-opacity duration-300 ${logo ? "opacity-100" : "opacity-0"}`}>
-        <p className="text-white font-extrabold text-[13vw] sm:text-[6.4vw]">HAUL<span className="text-brand">GO</span></p>
+    <ErrorBoundary>
+      <div className="absolute inset-0 bg-obsidian">
+        <Canvas dpr={1} camera={{ fov: 34, position: [8, 1.6, 9], near: 0.1, far: 200 }} gl={{ antialias: false, powerPreference: "low-power", stencil: false, depth: true }}>
+          <Director onLogo={() => setLogo(true)} />
+        </Canvas>
+        <div className={`absolute left-0 right-0 top-[5%] text-center pointer-events-none transition-opacity duration-300 ${logo ? "opacity-100" : "opacity-0"}`}>
+          <p className="text-white font-extrabold text-[13vw] sm:text-[6.4vw]">HAUL<span className="text-brand">GO</span></p>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }
 

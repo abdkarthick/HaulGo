@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, Component, ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, remembered, Role, tokens } from "../lib/api";
 import { Field, Spinner, Warn } from "../components/ui";
@@ -9,8 +9,20 @@ import { useI18n } from "../lib/i18n";
 import { LanguageButton, LanguagePicker } from "../components/Language";
 import { sendOtpToPhone } from "../services/auth";
 
+// FIX: 3D chunk 404 adicha kooda site blank aagathu, 3D mattum off aagum
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(e: any) { console.warn("3D failed, skipping:", e); }
+  render() { return this.state.hasError ? null : this.props.children; }
+}
+
 const Assistant = lazy(() => import("../components/Assistant"));
-const HeroStage = lazy(() => import("../components/World3D").then((m) => ({ default: m.HeroStage })));
+const HeroStage = lazy(() =>
+  import("../components/World3D")
+    .then((m) => ({ default: m.HeroStage }))
+    .catch(() => ({ default: () => null as any }))
+);
 
 type Cfg = { google_client_id?: string | null; dev_mode: boolean; payment_mode: string; integrations: Record<string, boolean>; support_phone: string };
 
@@ -92,9 +104,11 @@ export default function Welcome() {
       </main>
       <div className="relative">
         {show3D ? (
-          <Suspense fallback={<div className="h-[40vh] min-h-[300px]" />}>
-            <HeroStage className="h-[40vh] min-h-[300px] w-full" paused={!introDone} />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<div className="h-[40vh] min-h-[300px]" />}>
+              <HeroStage className="h-[40vh] min-h-[300px] w-full" paused={!introDone} />
+            </Suspense>
+          </ErrorBoundary>
         ) : (
           <div className="h-[40vh] min-h-[300px]" aria-hidden="true" />
         )}
