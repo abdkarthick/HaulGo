@@ -236,9 +236,9 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
 
       {otpSent && (
         <div className="space-y-2 rounded-xl bg-offwhite p-3">
-          <Field label="Enter OTP - SMS la vanthathu">
-            <input className="input tracking-[.5em] text-center text-lg font-bold !bg-white" inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder="4 digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} />
-          </Field>
+          <label className="block">
+            <input className="input tracking-[.5em] text-center text-lg font-bold !bg-white" aria-label="OTP" inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder="4 digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} />
+          </label>
           <button type="button" onClick={verify} disabled={verifying || otp.length < 4} className="btn-primary w-full !py-3.5 text-base">
             {verifying ? <Spinner /> : "Verify OTP & Login"}
           </button>
