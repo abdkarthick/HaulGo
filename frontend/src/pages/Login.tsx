@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { sendOtpToPhone } from "../services/auth";
 
 export default function Login() {
   const [number, setNumber] = useState("");
@@ -28,26 +29,13 @@ export default function Login() {
 
     setLoading(true);
 
-    // MSG91 Widget iruka nu check pannu
-    // @ts-ignore
-    if (typeof window.sendOTP === "function") {
-      // @ts-ignore
-      window.sendOTP(
-        "91" + number,
-        (data: any) => {
-          console.log("OTP Sent", data);
-          setLoading(false);
-          // Widget popup open aayidum, anga OTP potta pothum
-        },
-        (err: any) => {
-          console.log("OTP Error", err);
-          setLoading(false);
-          setError("OTP anupa mudiyala. MSG91 Widget load aacha nu paaru.");
-        }
-      );
-    } else {
+    try {
+      await sendOtpToPhone(`+91${number}`);
+    } catch (error) {
+      console.error("MSG91 OTP send failed", error);
+      setError("OTP anupa mudiyala. MSG91 Widget load aacha nu paaru.");
+    } finally {
       setLoading(false);
-      setError("OTP widget load aagala da. Page ah refresh panni thirumba try pannu.");
     }
   };
 

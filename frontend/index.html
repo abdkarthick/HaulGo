@@ -29,17 +29,16 @@
         success: function (data) {
           console.log('success response', data);
           window.dispatchEvent(new CustomEvent("msg91-verified", { detail: data }));
-          window.dispatchEvent(new Event("msg91-verified"));
         },
         failure: function (error) {
-          console.log('failure reason', error);
+          console.error('MSG91 OTP failure', error);
         }
       };
-      window.addEventListener('load', function () {
-        if (typeof window.initSendOTP === 'function') {
-          window.initSendOTP(configuration);
-        }
-      });
+      if (typeof window.initSendOTP === 'function') {
+        window.initSendOTP(configuration);
+      } else {
+        console.error('MSG91 OTP provider loaded without initSendOTP');
+      }
     </script>
   </body>
 </html>
