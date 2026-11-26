@@ -7,7 +7,7 @@ import { useToast } from "../lib/session";
 import { useIntroDone } from "./Intro";
 import { useI18n } from "../lib/i18n";
 import { LanguageButton, LanguagePicker } from "../components/Language";
-import { sendOtpToPhone } from "../services/auth";
+import { sendOtpToPhone, verifyOtpCode } from "../services/auth";
 
 // FIX: 3D chunk 404 adicha kooda site blank aagathu, 3D mattum off aagum
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -149,7 +149,10 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(0);
-  useEffect(() => { setPhone(remembered.phone(role)); setIsNew(false); }, [role]);
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  useEffect(() => { setPhone(remembered.phone(role)); setIsNew(false); setOtpSent(false); setOtp(""); }, [role]);
   useEffect(() => { if (left <= 0) return; const id = setTimeout(() => setLeft(left - 1), 1000); return () => clearTimeout(id); }, [left]);
 
   useEffect(() => {
@@ -176,16 +179,30 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
         const r = await api("customer", "/auth/otp/request", { body: { phone, role } });
         setIsNew(r.is_new);
       } catch { setIsNew(false); }
+      setOtpSent(true);
+      setOtp("");
       setLeft(30);
-      toast("OTP sent to your mobile - Popup la podu", "ok");
+      toast("OTP sent - keela OTP ah podu", "ok");
     } catch (e: any) {
       console.error(e);
       toast(e.message || "Failed to send OTP. Try again.", "err");
     } finally { setBusy(false); }
   };
 
+  const verify = async () => {
+    if (otp.length < 4) return;
+    setVerifying(true);
+    try {
+      await verifyOtpCode(otp);
+      // success na msg91-verified event auto ah login pannidum
+    } catch (e: any) {
+      console.error(e);
+      toast(e.message || "OTP thappu. Thumba try pannu.", "err");
+    } finally { setVerifying(false); }
+  };
+
   return (
-    <form onSubmit={(e) => { e.preventDefault(); request(); }} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); if (otpSent) verify(); else request(); }} className="space-y-4">
       <div>
         <h2 className="text-2xl font-extrabold">{role === "customer" ? t("login.titleC") : t("login.titleD")}</h2>
         <p className="text-sm text-steel mt-1">{role === "customer" ? t("login.subC") : t("login.subD")}</p>
@@ -196,10 +213,26 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
         </div>
       </Field>
       {isNew && <Field label={t("login.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>}
-      {left > 0 && <button type="button" className="text-xs font-semibold text-steel" onClick={request}>{t("login.resendIn", { n: left })}</button>}
-      <button className="btn-primary w-full !py-3.5 text-base" disabled={busy || phone.length !== 10 || (isNew && !name.trim())}>
-        {busy ? <Spinner /> : t("login.getOtp")}
-      </button>
+
+      {otpSent && (
+        <div className="space-y-2 rounded-xl bg-offwhite p-3">
+          <Field label="Enter OTP - SMS la vanthathu">
+            <input className="input tracking-[.5em] text-center text-lg font-bold !bg-white" inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder="4 / 6 digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} />
+          </Field>
+          <button type="button" onClick={verify} disabled={verifying || otp.length < 4} className="btn-primary w-full !py-3.5 text-base">
+            {verifying ? <Spinner /> : "Verify OTP & Login"}
+          </button>
+          {left > 0
+            ? <p className="text-xs text-center text-steel">{t("login.resendIn", { n: left })}</p>
+            : <button type="button" className="w-full text-xs font-semibold text-steel" onClick={request}>Resend OTP</button>}
+        </div>
+      )}
+
+      {!otpSent && (
+        <button className="btn-primary w-full !py-3.5 text-base" disabled={busy || phone.length !== 10 || (isNew && !name.trim())}>
+          {busy ? <Spinner /> : t("login.getOtp")}
+        </button>
+      )}
       <p className="text-[11px] text-steel text-center">By continuing you agree to HaulGo's terms. Support: {cfg?.support_phone || "+91 81487 69354"}</p>
     </form>
   );
