@@ -14,13 +14,18 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
+    <!-- MSG91 CAPTCHA - ithu kandippa venum -->
+    <div id="msg91-captcha"></div>
+
     <!-- MSG91 OTP WIDGET -->
     <script src="https://verify.msg91.com/otp-provider.js"></script>
     <script type="text/javascript">
       var configuration = {
-        widgetId: "UNGA_PUTHU_WIDGET_ID_INGA_PODU",
-        tokenAuth: "UNGA_PUTHU_TOKEN_AUTH_INGA_PODU",
+        widgetId: "366b7a6a6865393631313735",
+        tokenAuth: "593846TohBxZlK6b080557P1",
+
         exposeMethods: true,
+        captchaRenderId: "msg91-captcha",
         success: function (data) {
           console.log('success response', data);
           window.dispatchEvent(new CustomEvent("msg91-verified", { detail: data }));
@@ -33,8 +38,6 @@
       window.addEventListener('load', function () {
         if (typeof window.initSendOTP === 'function') {
           window.initSendOTP(configuration);
-        } else {
-          console.log('MSG91 initSendOTP not found');
         }
       });
     </script>
