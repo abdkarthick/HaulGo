@@ -7,6 +7,8 @@ import { useToast } from "../lib/session";
 import { useIntroDone } from "./Intro";
 import { useI18n } from "../lib/i18n";
 import { LanguageButton, LanguagePicker } from "../components/Language";
+import { sendOtpToPhone } from "../services/auth";
+import type { ConfirmationResult } from "firebase/auth";
 
 const Assistant = lazy(() => import("../components/Assistant"));
 const HeroStage = lazy(() => import("../components/World3D").then((m) => ({ default: m.HeroStage })));
@@ -63,6 +65,7 @@ export default function Welcome() {
 
   return (
     <div className="min-h-screen bg-obsidian text-white relative overflow-hidden">
+      <div id="recaptcha-container"></div>
       {introDone && showPicker && firstRun && !pickerDone && <LanguagePicker blocking onClose={() => setPickerDone(true)} />}
       {introDone && showPicker && (!firstRun || pickerDone) && (
         <Suspense fallback={null}><Assistant role={role} /></Suspense>
@@ -139,27 +142,57 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [isNew, setIsNew] = useState(false);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(0);
-  useEffect(() => { setPhone(remembered.phone(role)); setStep("phone"); setOtp(""); setDevOtp(null); }, [role]);
+  const confirmationRef = useRef<ConfirmationResult | null>(null);
+  useEffect(() => { setPhone(remembered.phone(role)); setStep("phone"); setOtp(""); setIsNew(false); confirmationRef.current = null; }, [role]);
   useEffect(() => { if (left <= 0) return; const id = setTimeout(() => setLeft(left - 1), 1000); return () => clearTimeout(id); }, [left]);
+
   const request = async () => {
+    if (phone.length !== 10) return;
     setBusy(true);
     try {
-      const r = await api("customer", "/auth/otp/request", { body: { phone, role } });
-      setIsNew(r.is_new); setDevOtp(r.dev_otp || null); setStep("otp"); setLeft(30);
-    } catch (e: any) { toast(e.message, "err"); } finally { setBusy(false); }
+      // FIREBASE REAL SMS - +91 oda anuppu
+      const confirmation = await sendOtpToPhone(`+91${phone}`);
+      confirmationRef.current = confirmation;
+      // Backend la user iruka nu check panna try pannu, illa na new user ah treat pannu
+      try {
+        const r = await api("customer", "/auth/otp/request", { body: { phone, role } });
+        setIsNew(r.is_new);
+      } catch { setIsNew(false); }
+      setStep("otp"); setLeft(30);
+      toast("OTP sent to your mobile", "ok");
+    } catch (e: any) {
+      console.error(e);
+      toast(e.message || "Failed to send OTP. Try again.", "err");
+    } finally { setBusy(false); }
   };
+
   const verify = async () => {
+    if (!confirmationRef.current) { toast("Please request OTP again", "err"); return; }
     setBusy(true);
     try {
-      const r = await api("customer", "/auth/otp/verify", { body: { phone, role, otp, name: name || undefined } });
-      tokens.set(role as Role, r.token);
+      // 1. Firebase la OTP verify pannu
+      const result = await confirmationRef.current.confirm(otp);
+      const idToken = await result.user.getIdToken();
+
+      // 2. Backend ku Firebase token ah anuppi HaulGo token vaangu
+      // Backend la /auth/firebase endpoint illa na, Firebase token ah vechu login pannu
+      let haulgoToken = idToken;
+      try {
+        const r = await api("customer", "/auth/firebase", { body: { idToken, phone, role, name: name || undefined } });
+        haulgoToken = r.token;
+      } catch { /* backend ready illa na Firebase token eh podhum */ }
+
+      tokens.set(role as Role, haulgoToken);
       remembered.setRole(role); remembered.setPhone(role, phone);
       nav(`/${role}`, { replace: true });
-    } catch (e: any) { toast(e.message, "err"); } finally { setBusy(false); }
+    } catch (e: any) {
+      console.error(e);
+      toast(e.message || "Invalid OTP", "err");
+    } finally { setBusy(false); }
   };
+
   return (
     <form onSubmit={(e) => { e.preventDefault(); step === "phone" ? request() : verify(); }} className="space-y-4">
       <div>
@@ -175,7 +208,6 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
         <>
           {isNew && <Field label={t("login.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required /></Field>}
           <Field label={t("login.enterOtp")}><input className="input tracking-[.5em] text-center text-lg font-bold" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} autoFocus /></Field>
-          {devOtp && <Warn>DEV MODE · No SMS provider is configured, so the OTP is shown here and was <b>not sent by SMS</b>. Your OTP: <b className="text-base tracking-widest">{devOtp}</b></Warn>}
           <button type="button" className="text-xs font-semibold text-steel disabled:opacity-50" disabled={left > 0} onClick={request}>{left > 0 ? t("login.resendIn", { n: left }) : t("login.resend")}</button>
         </>
       )}
