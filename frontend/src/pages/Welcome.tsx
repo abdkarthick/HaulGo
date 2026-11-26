@@ -152,22 +152,29 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  useEffect(() => { setPhone(remembered.phone(role)); setIsNew(false); setOtpSent(false); setOtp(""); }, [role]);
+  const loggedInRef = useRef(false);
+  useEffect(() => { setPhone(remembered.phone(role)); setIsNew(false); setOtpSent(false); setOtp(""); loggedInRef.current = false; }, [role]);
   useEffect(() => { if (left <= 0) return; const id = setTimeout(() => setLeft(left - 1), 1000); return () => clearTimeout(id); }, [left]);
 
+  // Shared login - event la irunthu varalum, verify la irunthu varalum oru thadava thaan pogum
+  const doLogin = async () => {
+    if (loggedInRef.current) return;
+    loggedInRef.current = true;
+    try {
+      const r = await api("customer", "/auth/firebase", { body: { idToken: "msg91", phone, role, name: name || undefined } });
+      tokens.set(role as Role, r.token);
+    } catch {
+      tokens.set(role as Role, "msg91-verified");
+    }
+    remembered.setRole(role); remembered.setPhone(role, phone);
+    nav(`/${role}`, { replace: true });
+  };
+
   useEffect(() => {
-    const handler = async () => {
-      try {
-        const r = await api("customer", "/auth/firebase", { body: { idToken: "msg91", phone, role, name: name || undefined } });
-        tokens.set(role as Role, r.token);
-      } catch {
-        tokens.set(role as Role, "msg91-verified");
-      }
-      remembered.setRole(role); remembered.setPhone(role, phone);
-      nav(`/${role}`, { replace: true });
-    };
+    const handler = () => { doLogin(); };
     window.addEventListener("msg91-verified", handler);
     return () => window.removeEventListener("msg91-verified", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone, role, name, nav]);
 
   const request = async () => {
@@ -195,7 +202,8 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
     setVerifying(true);
     try {
       await verifyOtpCode(otp);
-      // success na msg91-verified event auto ah login pannidum
+      // FIX 4: Event ku wait panna vendam, verify aana odane neeye ulla kondu po
+      await doLogin();
     } catch (e: any) {
       console.error(e);
       toast(e.message || "OTP thappu. Thumba try pannu.", "err");
