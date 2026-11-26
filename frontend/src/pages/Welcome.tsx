@@ -173,15 +173,16 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const request = async () => {
     if (phone.length !== 10) return;
     setBusy(true);
+    // FIX 1: MSG91 ku wait panna vendam, click panna odane OTP box kaatu
+    setOtpSent(true);
+    setOtp("");
+    setLeft(30);
     try {
       await sendOtpToPhone(`+91${phone}`);
       try {
         const r = await api("customer", "/auth/otp/request", { body: { phone, role } });
         setIsNew(r.is_new);
       } catch { setIsNew(false); }
-      setOtpSent(true);
-      setOtp("");
-      setLeft(30);
       toast("OTP sent - keela OTP ah podu", "ok");
     } catch (e: any) {
       console.error(e);
@@ -212,12 +213,13 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
           <input className="input" inputMode="numeric" autoComplete="tel-national" maxLength={10} placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} autoFocus />
         </div>
       </Field>
-      {isNew && <Field label={t("login.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>}
+      {/* FIX 2: OTP vantha aprom YOUR NAME ah kaataatha, appo thaan OTP ah anga poda maatta */}
+      {isNew && !otpSent && <Field label={t("login.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>}
 
       {otpSent && (
         <div className="space-y-2 rounded-xl bg-offwhite p-3">
           <Field label="Enter OTP - SMS la vanthathu">
-            <input className="input tracking-[.5em] text-center text-lg font-bold !bg-white" inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder="4 / 6 digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} />
+            <input className="input tracking-[.5em] text-center text-lg font-bold !bg-white" inputMode="numeric" maxLength={6} autoComplete="one-time-code" placeholder="4 digit OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} />
           </Field>
           <button type="button" onClick={verify} disabled={verifying || otp.length < 4} className="btn-primary w-full !py-3.5 text-base">
             {verifying ? <Spinner /> : "Verify OTP & Login"}
@@ -228,8 +230,9 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
         </div>
       )}
 
+      {/* FIX 3: Get OTP ah name illa nu lock pannaatha */}
       {!otpSent && (
-        <button className="btn-primary w-full !py-3.5 text-base" disabled={busy || phone.length !== 10 || (isNew && !name.trim())}>
+        <button className="btn-primary w-full !py-3.5 text-base" disabled={busy || phone.length !== 10}>
           {busy ? <Spinner /> : t("login.getOtp")}
         </button>
       )}
