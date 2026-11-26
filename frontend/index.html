@@ -8,11 +8,51 @@
     <meta name="description" content="HaulGo - Book mini trucks, tempos & industrial transport in Chennai, Kanchipuram in 2 mins. Transparent fare, verified drivers, live tracking." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- PERF: API ah munnadiye connect pannu -->
     <link rel="preconnect" href="https://haulgo-1.onrender.com" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- MSG91 OTP WIDGET -->
+    <script type="text/javascript">
+      var configuration = {
+        widgetId: "366b7a6a6865393631313735",
+        tokenAuth: "593846AB9BTrNSs6b08027aP1",
+        identifier: "91",
+        exposeMethods: true,
+        success: (data) => {
+          console.log('success response', data);
+          window.dispatchEvent(new CustomEvent("msg91-verified", { detail: data }));
+        },
+        failure: (error) => {
+          console.log('failure reason', error);
+        },
+      };
+    </script>
+    <script type="text/javascript">
+      (function loadOtpScript(urls) {
+        let i = 0;
+        function attempt() {
+          const s = document.createElement('script');
+          s.src = urls[i];
+          s.async = true;
+          s.onload = () => {
+            if (typeof window.initSendOTP === 'function') {
+              window.initSendOTP(configuration);
+            }
+          };
+          s.onerror = () => {
+            i++;
+            if (i < urls.length) { attempt(); }
+          };
+          document.head.appendChild(s);
+        }
+        attempt();
+      })([
+        'https://verify.msg91.com/otp-provider.js',
+        'https://verify.phone91.com/otp-provider.js'
+      ]);
+    </script>
   </body>
 </html>

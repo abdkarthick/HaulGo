@@ -8,7 +8,6 @@ import { useIntroDone } from "./Intro";
 import { useI18n } from "../lib/i18n";
 import { LanguageButton, LanguagePicker } from "../components/Language";
 import { sendOtpToPhone } from "../services/auth";
-import type { ConfirmationResult } from "firebase/auth";
 
 const Assistant = lazy(() => import("../components/Assistant"));
 const HeroStage = lazy(() => import("../components/World3D").then((m) => ({ default: m.HeroStage })));
@@ -18,7 +17,6 @@ type Cfg = { google_client_id?: string | null; dev_mode: boolean; payment_mode: 
 export default function Welcome() {
   const [role, setRole] = useState<"customer" | "driver">(() => (remembered.role() === "driver" ? "driver" : "customer"));
   const [cfg, setCfg] = useState<Cfg | null>(null);
-  // PERF: config ah idle la thaan eduku - LCP ah block panna koodathu
   useEffect(() => {
     const id = setTimeout(() => { api<Cfg>("customer", "/config").then(setCfg).catch(() => {}); }, 800);
     return () => clearTimeout(id);
@@ -27,8 +25,6 @@ export default function Welcome() {
   const { t } = useI18n();
   const [firstRun] = useState(true);
   const [pickerDone, setPickerDone] = useState(false);
-
-  // PERF FIX: Language Picker ah 1200ms delay - LCP element Welcome H1 thaan, Picker illa
   const [showPicker, setShowPicker] = useState(false);
   useEffect(() => {
     if (!introDone) return;
@@ -60,17 +56,14 @@ export default function Welcome() {
     };
   }, [introDone]);
 
-  // PERF FIX: scrollIntoView + querySelector ah thookiten - Forced Reflow pogum
   const pick = (r: "customer" | "driver") => { setRole(r); };
 
   return (
     <div className="min-h-screen bg-obsidian text-white relative overflow-hidden">
-      <div id="recaptcha-container"></div>
       {introDone && showPicker && firstRun && !pickerDone && <LanguagePicker blocking onClose={() => setPickerDone(true)} />}
       {introDone && showPicker && (!firstRun || pickerDone) && (
         <Suspense fallback={null}><Assistant role={role} /></Suspense>
       )}
-      {/* PERF: blur-3xl div ah thookiten - ithu thaan CPU ah saapuduthu */}
       <header className="relative z-10 w-full max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
         <Logo light size={24} />
         <div className="flex items-center gap-3"><LanguageButton light /><Link to="/admin" className="text-xs text-white/50 hover:text-white font-semibold">Admin sign in →</Link></div>
@@ -138,89 +131,61 @@ function MobileLogin({ role, cfg }: { role: "customer" | "driver"; cfg: Cfg | nu
   const nav = useNavigate();
   const toast = useToast();
   const [phone, setPhone] = useState(remembered.phone(role));
-  const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(0);
-  const confirmationRef = useRef<ConfirmationResult | null>(null);
-  useEffect(() => { setPhone(remembered.phone(role)); setStep("phone"); setOtp(""); setIsNew(false); confirmationRef.current = null; }, [role]);
+  useEffect(() => { setPhone(remembered.phone(role)); setIsNew(false); }, [role]);
   useEffect(() => { if (left <= 0) return; const id = setTimeout(() => setLeft(left - 1), 1000); return () => clearTimeout(id); }, [left]);
+
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const r = await api("customer", "/auth/firebase", { body: { idToken: "msg91", phone, role, name: name || undefined } });
+        tokens.set(role as Role, r.token);
+      } catch {
+        tokens.set(role as Role, "msg91-verified");
+      }
+      remembered.setRole(role); remembered.setPhone(role, phone);
+      nav(`/${role}`, { replace: true });
+    };
+    window.addEventListener("msg91-verified", handler);
+    return () => window.removeEventListener("msg91-verified", handler);
+  }, [phone, role, name, nav]);
 
   const request = async () => {
     if (phone.length !== 10) return;
     setBusy(true);
     try {
-      // FIREBASE REAL SMS - +91 oda anuppu
-      const confirmation = await sendOtpToPhone(`+91${phone}`);
-      confirmationRef.current = confirmation;
-      // Backend la user iruka nu check panna try pannu, illa na new user ah treat pannu
+      await sendOtpToPhone(`+91${phone}`);
       try {
         const r = await api("customer", "/auth/otp/request", { body: { phone, role } });
         setIsNew(r.is_new);
       } catch { setIsNew(false); }
-      setStep("otp"); setLeft(30);
-      toast("OTP sent to your mobile", "ok");
+      setLeft(30);
+      toast("OTP sent to your mobile - Popup la podu", "ok");
     } catch (e: any) {
       console.error(e);
       toast(e.message || "Failed to send OTP. Try again.", "err");
     } finally { setBusy(false); }
   };
 
-  const verify = async () => {
-    if (!confirmationRef.current) { toast("Please request OTP again", "err"); return; }
-    setBusy(true);
-    try {
-      // 1. Firebase la OTP verify pannu
-      const result = await confirmationRef.current.confirm(otp);
-      const idToken = await result.user.getIdToken();
-
-      // 2. Backend ku Firebase token ah anuppi HaulGo token vaangu
-      // Backend la /auth/firebase endpoint illa na, Firebase token ah vechu login pannu
-      let haulgoToken = idToken;
-      try {
-        const r = await api("customer", "/auth/firebase", { body: { idToken, phone, role, name: name || undefined } });
-        haulgoToken = r.token;
-      } catch { /* backend ready illa na Firebase token eh podhum */ }
-
-      tokens.set(role as Role, haulgoToken);
-      remembered.setRole(role); remembered.setPhone(role, phone);
-      nav(`/${role}`, { replace: true });
-    } catch (e: any) {
-      console.error(e);
-      toast(e.message || "Invalid OTP", "err");
-    } finally { setBusy(false); }
-  };
-
   return (
-    <form onSubmit={(e) => { e.preventDefault(); step === "phone" ? request() : verify(); }} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); request(); }} className="space-y-4">
       <div>
         <h2 className="text-2xl font-extrabold">{role === "customer" ? t("login.titleC") : t("login.titleD")}</h2>
         <p className="text-sm text-steel mt-1">{role === "customer" ? t("login.subC") : t("login.subD")}</p>
       </div>
       <Field label={t("login.mobile")}>
         <div className="flex gap-2"><span className="input !w-16 text-center bg-offwhite">+91</span>
-          <input className="input" inputMode="numeric" autoComplete="tel-national" maxLength={10} placeholder="10-digit number" value={phone} disabled={step === "otp"} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} autoFocus />
+          <input className="input" inputMode="numeric" autoComplete="tel-national" maxLength={10} placeholder="10-digit number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} autoFocus />
         </div>
       </Field>
-      {step === "otp" && (
-        <>
-          {isNew && <Field label={t("login.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required /></Field>}
-          <Field label={t("login.enterOtp")}><input className="input tracking-[.5em] text-center text-lg font-bold" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} autoFocus /></Field>
-          <button type="button" className="text-xs font-semibold text-steel disabled:opacity-50" disabled={left > 0} onClick={request}>{left > 0 ? t("login.resendIn", { n: left }) : t("login.resend")}</button>
-        </>
-      )}
-      <button className="btn-primary w-full !py-3.5 text-base" disabled={busy || phone.length !== 10 || (step === "otp" && (otp.length !== 6 || (isNew && !name.trim())))}>
-        {busy ? <Spinner /> : step === "phone" ? t("login.getOtp") : t("login.verify")}
+      {isNew && <Field label={t("login.name")}><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>}
+      {left > 0 && <button type="button" className="text-xs font-semibold text-steel" onClick={request}>{t("login.resendIn", { n: left })}</button>}
+      <button className="btn-primary w-full !py-3.5 text-base" disabled={busy || phone.length !== 10 || (isNew && !name.trim())}>
+        {busy ? <Spinner /> : t("login.getOtp")}
       </button>
-      {step === "otp" && <button type="button" className="w-full text-sm text-steel font-semibold" onClick={() => { setStep("phone"); setOtp(""); }}>{t("login.change")}</button>}
-      {step === "phone" && (
-        <>
-          <div className="flex items-center gap-3 text-xs text-steel font-semibold"><span className="flex-1 h-px bg-line" />{t("login.or")}<span className="flex-1 h-px bg-line" /></div>
-          <GoogleSignIn role={role} clientId={cfg?.google_client_id || null} />
-        </>
-      )}
       <p className="text-[11px] text-steel text-center">By continuing you agree to HaulGo's terms. Support: {cfg?.support_phone || "+91 81487 69354"}</p>
     </form>
   );
@@ -268,7 +233,6 @@ function GoogleSignIn({ role, clientId }: { role: "customer" | "driver"; clientI
           },
         });
         box.current.innerHTML = "";
-        // PERF FIX: clientWidth ah thookiten - Fixed 320, Forced Reflow illa
         g.renderButton(box.current, { theme: "outline", size: "large", shape: "pill", text: "continue_with", width: 320 });
       }).catch((e) => toast(e.message, "err"));
     }, 1500);

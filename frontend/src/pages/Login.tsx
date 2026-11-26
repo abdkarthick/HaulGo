@@ -1,12 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const [number, setNumber] = useState("");
   const [error, setError] = useState("");
-  const { sendOtp, loading } = useAuth();
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // MSG91 success aana, /otp page ku pogama direct ah home ku anuppu
+  useEffect(() => {
+    const handleVerified = (e: any) => {
+      console.log("MSG91 Verified:", e.detail);
+      localStorage.setItem("haulgo_phone", "+91" + number);
+      localStorage.setItem("haulgo_verified", "true");
+      navigate("/");
+    };
+    window.addEventListener("msg91-verified", handleVerified);
+    return () => window.removeEventListener("msg91-verified", handleVerified);
+  }, [number, navigate]);
 
   const handleSendOtp = async () => {
     setError("");
@@ -14,13 +25,29 @@ export default function Login() {
       setError("10 digit mobile number podu da.");
       return;
     }
-    try {
-      const fullNumber = "+91" + number;
-      await sendOtp(fullNumber);
-      navigate("/otp");
-    } catch (e: any) {
-      console.error(e);
-      setError("OTP anupa mudiyala. Firebase config / Phone Auth enable panniya nu paaru.");
+
+    setLoading(true);
+
+    // MSG91 Widget iruka nu check pannu
+    // @ts-ignore
+    if (typeof window.sendOTP === "function") {
+      // @ts-ignore
+      window.sendOTP(
+        "91" + number,
+        (data: any) => {
+          console.log("OTP Sent", data);
+          setLoading(false);
+          // Widget popup open aayidum, anga OTP potta pothum
+        },
+        (err: any) => {
+          console.log("OTP Error", err);
+          setLoading(false);
+          setError("OTP anupa mudiyala. MSG91 Widget load aacha nu paaru.");
+        }
+      );
+    } else {
+      setLoading(false);
+      setError("OTP widget load aagala da. Page ah refresh panni thirumba try pannu.");
     }
   };
 
@@ -50,8 +77,7 @@ export default function Login() {
         {loading ? "Anupurathu..." : "Get OTP"}
       </button>
 
-      {/* Firebase ku thevai - itha azhika koodathu */}
-      <div id="recaptcha-container"></div>
+      {/* MSG91 Widget itha use pannum - Firebase recaptcha thevai illa, atha eduthuten */}
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { LangProvider } from "./lib/i18n";
 import { Loading } from "./components/ui";
 import { AuthProvider } from "./context/AuthContext";
 
-// PERF FIX: IntroShell ah kooda lazy - 3D Intro code Home la udane vendaam
 const IntroShell = lazy(() => import("./pages/Intro"));
 const Welcome = lazy(() => import("./pages/Welcome"));
 const CustomerApp = lazy(() => import("./customer/CustomerApp"));
@@ -13,7 +12,6 @@ const DriverApp = lazy(() => import("./driver/DriverApp"));
 const AdminApp = lazy(() => import("./admin/AdminApp"));
 const Track = lazy(() => import("./pages/Track"));
 
-// AUTH - Login / OTP
 const Login = lazy(() => import("./pages/Login"));
 const Otp = lazy(() => import("./pages/Otp"));
 

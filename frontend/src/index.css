@@ -26,10 +26,4 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 .hg-marker { background: none; border: none; }
 .safe-b { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
 .no-scrollbar::-webkit-scrollbar { display: none; }
-/* PERF FIX: section { content-visibility } ah DELETE panniten - ithu thaan Forced Reflow + Layout Shift ku kaaranam */
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } 
-.grecaptcha-badge { 
-  visibility: hidden !important; 
-  opacity: 0 !important; 
-  display: none !important;
-} }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
