@@ -22,29 +22,43 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// reCAPTCHA - Firebase ku robot illa nu prove panna
+// reCAPTCHA - INVISIBLE - User ku theriyaathu, background la verify aayidum
+let verifier: RecaptchaVerifier | null = null;
+
 export const setupRecaptcha = () => {
-  if (!(window as any).recaptchaVerifier) {
-    (window as any).recaptchaVerifier = new RecaptchaVerifier(
-      auth,
-      "recaptcha-container",
-      {
-        size: "invisible",
-        callback: () => {},
-      }
-    );
-  }
-  return (window as any).recaptchaVerifier;
+  if (verifier) return verifier;
+
+  verifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+    size: "invisible",
+    callback: () => {},
+    "expired-callback": () => {
+      // Expire aana verifier ah clear pannitu puthusa create pannu
+      verifier?.clear();
+      verifier = null;
+    },
+  });
+  return verifier;
 };
 
 export const sendOtpToPhone = async (
   phoneNumber: string
 ): Promise<ConfirmationResult> => {
   const appVerifier = setupRecaptcha();
+  // Invisible verifier ah render pannu
+  await appVerifier.render();
   const confirmation = await signInWithPhoneNumber(
     auth,
     phoneNumber,
     appVerifier
   );
   return confirmation;
+};
+
+// OTP verify aana aprom / Resend pannum pothu verifier ah clear panna itha use pannu
+export const clearRecaptcha = () => {
+  try {
+    verifier?.clear();
+  } catch {}
+  verifier = null;
+  (window as any).recaptchaVerifier = null;
 };
