@@ -33,7 +33,7 @@ export default function Login() {
       await sendOtpToPhone(`+91${number}`);
     } catch (error) {
       console.error("MSG91 OTP send failed", error);
-      setError("OTP anupa mudiyala. MSG91 Widget load aacha nu paaru.");
+      setError(error instanceof Error ? error.message : "MSG91 OTP request failed. Check the widget settings.");
     } finally {
       setLoading(false);
     }
